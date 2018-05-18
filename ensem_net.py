@@ -41,6 +41,7 @@ def construct_tvp_2d(X_trian, is_training, dp_rate=0.0):
         conv3_pl = tf.layers.max_pooling2d(conv3_bn, 2, 2, name='pool3')
         conv3_dp = tf.layers.dropout(conv3_pl, rate=dp_rate, training=is_training, name='conv3_dp')
         out = tf.contrib.layers.flatten(conv3_dp)
+
     return out
 
 #Construct 1D DM 16*64
@@ -55,6 +56,7 @@ def construct_dm_1d(X_train, is_training, dp_rate=0.0):
         conv2_pl = tf.layers.max_pooling1d(conv2_bn, 2, 2, name='pool2')
         conv2_dp = tf.layers.dropout(conv2_pl, rate=dp_rate, training=is_training, name='conv2_dp')
         out = tf.contrib.layers.flatten(conv2_dp)
+
     return out
 
 #Construct 1D profiles 16*64
@@ -75,8 +77,10 @@ def construct_prof_1d(X_train, is_training, dp_rate=0.0):
 def merge_model(model1, model2, model3, model4,is_training, rate=0.):
     with tf.variable_scope('merge_model'):
         model = tf.concat([model1, model2, model3, model4], axis=1)
+        # model = tf.add_n([model1, model2, model3, model4])
+        # model = tf.squeeze(model, axis=1)
         model_drop_1 = tf.layers.dropout(model, training=is_training, rate=rate)
-        model_fc_1 = tf.layers.dense(model_drop_1, 512, activation=tf.nn.relu)
+        model_fc_1 = tf.layers.dense(model_drop_1, 256, activation=tf.nn.relu)
         mode_drop_2 = tf.layers.dropout(model_fc_1, training=is_training, rate=rate)
         logits = tf.layers.dense(mode_drop_2, 2, activation=tf.nn.relu)
 

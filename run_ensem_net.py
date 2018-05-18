@@ -20,13 +20,13 @@ from gen_train_val import PulsarDataGenerator
 class ensem_model(object):
 
     def __init__(self, image_size, num_epoch, batch_size, learning_rate,
-                 num_classes, dropout_rate, filewriter_path, checkpoint_path,
+                 weight_decay, num_classes, dropout_rate, filewriter_path, checkpoint_path,
                  is_restore=True):
         self.image_size =image_size
         self.num_epochs = num_epoch
         self.batch_size = batch_size
         self.learning_rate = learning_rate
-        # self.weight_decay = weight_decay
+        self.weight_decay = weight_decay
         self.num_classes = num_classes
         self.display = 20
         self.dropout_rate = dropout_rate
@@ -59,21 +59,32 @@ class ensem_model(object):
         predict = model_merge
         output = tf.nn.softmax(predict, name='output')
         # var_list = [v for v in tf.trainable_variables]
+        # add weight decay, l2 loss
+        weight_cost = []
+        for var in tf.trainable_variables():
+            weight_cost.append(tf.nn.l2_loss(var))
+        decay_cost = tf.multiply(self.weight_decay, tf.add_n(weight_cost))
+
         with tf.name_scope("corss_ent"):
-            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=output, labels=y))
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=output, labels=y))
+            cost += decay_cost
 
         optimizer = tf.train.MomentumOptimizer(self.learning_rate, 0.9)
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         with tf.control_dependencies(update_ops):
             train_op = optimizer.minimize(cost)
         # for batch normalization as above
-        tf.summary.scalar('corss_entropy', cost)
-        merged_summary = tf.summary.merge_all()
-        writer = tf.summary.FileWriter(self.filewriter_path)
+
 
         with tf.name_scope("accuracy"):
             prediction = tf.equal(tf.argmax(output, 1), tf.argmax(y, 1))
             accuracy = tf.reduce_mean(tf.cast(prediction, tf.float32))
+
+        tf.summary.scalar('corss_entropy', cost)
+        tf.summary.scalar('accuracy', accuracy)
+        merged_summary = tf.summary.merge_all()
+        writer = tf.summary.FileWriter(self.filewriter_path)
+
 
         saver = tf.train.Saver()
         train_generator = ImageDataGenerator(fvp_train, tvp_train, dm_train, prof_train, label_train,
@@ -176,9 +187,9 @@ if __name__ =="__main__":
         num_epoch=100,
         batch_size=16,
         learning_rate=0.0001,
-        # weight_decay=0.00002,
+        weight_decay=0.00002,
         num_classes=2,
-        dropout_rate=0.5,
+        dropout_rate=0.4,
         filewriter_path="tmp/tensorboard",
         checkpoint_path="tmp/checkpoints",
         is_restore=False
