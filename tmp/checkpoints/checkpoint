@@ -1,6 +1,6 @@
-model_checkpoint_path: "epoch_15"
-all_model_checkpoint_paths: "epoch_12"
-all_model_checkpoint_paths: "epoch_13"
-all_model_checkpoint_paths: "epoch_14"
-all_model_checkpoint_paths: "epoch_15"
-
+model_checkpoint_path: "epoch_27"
+all_model_checkpoint_paths: "epoch_23"
+all_model_checkpoint_paths: "epoch_24"
+all_model_checkpoint_paths: "epoch_25"
+all_model_checkpoint_paths: "epoch_26"
+all_model_checkpoint_paths: "epoch_27"
