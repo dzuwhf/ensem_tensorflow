@@ -31,9 +31,7 @@ class Classify(object):
             tvp = graph.get_tensor_by_name('input2:0')
             dm = graph.get_tensor_by_name('input3:0')
             profile = graph.get_tensor_by_name('input4:0')
-            drop_2d_rate = graph.get_tensor_by_name('drop_2d_rate:0')
-            drop_1d_rate = graph.get_tensor_by_name('drop_1d_rate:0')
-            drop_fc_rate = graph.get_tensor_by_name('drop_fc_rate:0')
+
             training = graph.get_tensor_by_name('is_training:0')
             y = graph.get_tensor_by_name('output:0')
             self.predict = []
@@ -51,7 +49,7 @@ class Classify(object):
                 data_dmb[0, :, 0] = res[8256:8320]
 
                 result = sess.run(y, feed_dict={fvp: data_Fvp, tvp: data_TvP, dm: data_dmb, profile: data_profile,
-                                                drop_2d_rate: 0, drop_1d_rate: 0, drop_fc_rate: 0, training: False})
+                                                training: False})
                 prob = np.round(result[0][1], 4)
                 self.predict.append(prob)
         def flatten(listOfLists):
@@ -64,15 +62,15 @@ class Classify(object):
         cPickle.dump(result, open('tmp/scores_ensemble_GBNCC.pkl', 'wb'), protocol=2)
         print 'done, result saved to tmp/scores_ensemble_GBNCC.pkl'
 
-        # fo = open('tmp/gbncc_prob.txt', 'w')
-        # for i, f in enumerate(self.pfdfiles):
-        #     fo.write('%s %s %s\n' % (f, self.cands[i], self.predict[i]))
-        # fo.close()
+        fo = open('tmp/gbncc_prob.txt', 'w')
+        for i, f in enumerate(self.pfdfiles):
+            fo.write('%s %s %s\n' % (f, self.cands[i], self.predict[i]))
+        fo.close()
 
 
 if __name__ == "__main__":
-    txt_file = '/data/whf/AI/training/ARCC_test/pfd_correct.txt'
-    # txt_file = 'tmp/gbncc_100.txt'
+    # txt_file = '/data/whf/AI/training/ARCC_test/pfd_correct.txt'
+    txt_file = 'tmp/gbncc_100.txt'
     cls = Classify(txt_file)
     cls.read_txt()
     cls.classify_gbncc()

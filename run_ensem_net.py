@@ -20,7 +20,7 @@ from gen_train_val import PulsarDataGenerator
 class ensem_model(object):
 
     def __init__(self, image_size, num_epoch, batch_size, learning_rate,
-                 weight_decay, num_classes, dropout_rate, filewriter_path, checkpoint_path,
+                 weight_decay, num_classes, filewriter_path, checkpoint_path,
                  is_restore=True):
         self.image_size =image_size
         self.num_epochs = num_epoch
@@ -29,7 +29,6 @@ class ensem_model(object):
         self.weight_decay = weight_decay
         self.num_classes = num_classes
         self.display = 20
-        self.dropout_rate = dropout_rate
         self.filewriter_path = filewriter_path
         mkdirs(self.filewriter_path)
         self.checkpoint_path = checkpoint_path
@@ -47,33 +46,47 @@ class ensem_model(object):
         x_3 = tf.placeholder(tf.float32, [None, self.image_size, 1], name='input3')
         x_4 = tf.placeholder(tf.float32, [None, self.image_size, 1], name='input4')
         y = tf.placeholder(tf.float32, [None, self.num_classes])
-        drop_2d_rate = tf.placeholder(tf.float32, name='drop_2d_rate')
-        drop_1d_rate = tf.placeholder(tf.float32, name='drop_1d_rate')
-        drop_fc_rate = tf.placeholder(tf.float32, name='drop_fc_rate')
+
         is_training = tf.placeholder(tf.bool, [], name='is_training')
-        model_fvp = ensem_net.construct_fvp_2d(x_1, is_training, drop_2d_rate)
-        model_tvp = ensem_net.construct_tvp_2d(x_2, is_training, drop_2d_rate)
-        model_dm = ensem_net.construct_dm_1d(x_3, is_training, drop_1d_rate)
-        model_prof = ensem_net.construct_prof_1d(x_4, is_training, drop_1d_rate)
-        model_merge = ensem_net.merge_model(model_fvp, model_tvp, model_dm, model_prof, is_training, drop_fc_rate)
+        model_fvp = ensem_net.construct_fvp_2d(x_1, is_training)
+        model_tvp = ensem_net.construct_tvp_2d(x_2, is_training)
+        model_dm = ensem_net.construct_dm_1d(x_3, is_training)
+        model_prof = ensem_net.construct_prof_1d(x_4, is_training)
+        model_merge = ensem_net.merge(model_fvp, model_tvp, model_dm, model_prof)
         predict = model_merge
         output = tf.nn.softmax(predict, name='output')
         # var_list = [v for v in tf.trainable_variables]
         # add weight decay, l2 loss
-        weight_cost = []
-        for var in tf.trainable_variables():
-            weight_cost.append(tf.nn.l2_loss(var))
-        decay_cost = tf.multiply(self.weight_decay, tf.add_n(weight_cost))
+        #
+        # weights_decay = []
+        # for var in tf.trainable_variables():
+        #     weights_decay.append(tf.nn.l2_loss(var))
+        #
+        # decay_cost = tf.multiply(self.weight_decay, tf.add_n(weights_decay))
 
         with tf.name_scope("corss_ent"):
-            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=output, labels=y))
-            cost += decay_cost
+            cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=output, labels=y))
+            # cost += decay_cost
 
-        optimizer = tf.train.MomentumOptimizer(self.learning_rate, 0.9)
-        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-        with tf.control_dependencies(update_ops):
-            train_op = optimizer.minimize(cost)
-        # for batch normalization as above
+
+        var_list = [v for v in tf.trainable_variables()]
+        with tf.name_scope("train"):
+            gradients = tf.gradients(cost, var_list)
+            gradients = list(zip(gradients, var_list))
+            optimizer = tf.train.MomentumOptimizer(self.learning_rate, 0.9)
+            train_op = optimizer.apply_gradients(grads_and_vars=gradients)
+
+        for gradient, var in gradients:
+            tf.summary.histogram(var.name + '/gradient', gradient)
+
+        for var in var_list:
+            tf.summary.histogram(var.name, var)
+
+        # optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        # update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        # with tf.control_dependencies(update_ops):
+        #     train_op = optimizer.minimize(cost)
+
 
 
         with tf.name_scope("accuracy"):
@@ -115,7 +128,6 @@ class ensem_model(object):
                 while step < train_batches_per_epoch:
                     batch_fvp, batch_tvp, batch_dm, batch_profi, batch_ys = train_generator.next_batch(self.batch_size)
                     feed_dict = {x_1: batch_fvp, x_2: batch_tvp, x_3: batch_dm, x_4: batch_profi, y: batch_ys,
-                                 drop_2d_rate: 0.4, drop_1d_rate: 0.4, drop_fc_rate: self.dropout_rate,
                                  is_training: True}
                     sess.run(train_op, feed_dict=feed_dict)
 
@@ -140,9 +152,7 @@ class ensem_model(object):
                     valid_loss, valid_acc, valid_out = sess.run([cost, accuracy, output],
                                                                 feed_dict={x_1: batch_fvp_val, x_2: batch_tvp_val,
                                                                            x_3: batch_dm_val, x_4: batch_profi_val,
-                                                                           y: batch_validy, drop_2d_rate: 0.0,
-                                                                           drop_1d_rate: 0.0,
-                                                                           drop_fc_rate: 0.0, is_training: False})
+                                                                           y: batch_validy, is_training: False})
                     v_loss += valid_loss
                     v_acc += valid_acc
                     count += 1
@@ -187,9 +197,8 @@ if __name__ =="__main__":
         num_epoch=100,
         batch_size=16,
         learning_rate=0.0001,
-        weight_decay=0.00002,
+        weight_decay=0.002,
         num_classes=2,
-        dropout_rate=0.4,
         filewriter_path="tmp/tensorboard",
         checkpoint_path="tmp/checkpoints",
         is_restore=False
